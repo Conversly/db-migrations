@@ -27,6 +27,14 @@ export const dataSourceType = pgEnum('DataSourceType', [
 ]);
 
 
+export const dataSourceStatus = pgEnum('DataSourceStatus', [
+  'QUEUEING',
+  'PROCESSING',
+  'COMPLETED',
+  'FAILED',
+]);
+
+
 export const user = pgTable(
   'user',
   {
@@ -118,6 +126,7 @@ export const dataSources = pgTable('data_source', {
   createdAt: timestamp('created_at', { mode: 'date', withTimezone: true, precision: 6 }).defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true, precision: 6 }).defaultNow(),
   name: varchar('name').notNull(),
+  status: dataSourceStatus().default('QUEUEING').notNull(),
   citation: text('citation'),
 }, (table) => [
   index('idx_datasource_citation').on(table.citation),

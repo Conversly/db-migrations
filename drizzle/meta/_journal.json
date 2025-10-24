@@ -15,6 +15,13 @@
       "when": 1761234414674,
       "tag": "0001_married_orphan",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1761297567079,
+      "tag": "0002_cool_millenium_guard",
+      "breakpoints": true
     }
   ]
 }
