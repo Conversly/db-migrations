@@ -35,6 +35,14 @@ export const dataSourceStatus = pgEnum('DataSourceStatus', [
 ]);
 
 
+export const chatbotStatus = pgEnum('ChatbotStatus', [
+  'TRAINING',
+  'ACTIVE',
+  'INACTIVE',
+]);
+
+
+
 export const user = pgTable(
   'user',
   {
@@ -104,6 +112,7 @@ export const chatBots = pgTable('chatbot', {
   name: varchar('name').notNull(),
   description: text('description').notNull(),
   systemPrompt: text('system_prompt').notNull(),
+  status: chatbotStatus().default('INACTIVE').notNull(), 
   createdAt: timestamp('created_at', { mode: 'date', withTimezone: true, precision: 6 }).defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true, precision: 6 }).defaultNow(),
   apiKey: varchar('api_key', { length: 255 }),
@@ -116,6 +125,40 @@ export const chatBots = pgTable('chatbot', {
     .onUpdate('cascade')
     .onDelete('cascade'),
   index('chatbot_user_id_idx').using('btree', table.userId.asc().nullsLast()),
+]);
+
+export const originDomains = pgTable('origin_domains', {
+  id: serial('id').primaryKey(),
+  userId: uuid('user_id').notNull(),
+  chatbotId: integer('chatbot_id').notNull(),
+  apiKey: varchar('api_key', { length: 255 }).notNull(),
+  domain: varchar('domain').notNull(),
+  createdAt: timestamp('created_at', { mode: 'date', precision: 6 }).defaultNow(),
+}, (table) => [
+  // Foreign key to chatbot
+  foreignKey({
+    columns: [table.chatbotId],
+    foreignColumns: [chatBots.id],
+    name: 'origin_domains_chatbot_id_fkey',
+  })
+    .onUpdate('cascade')
+    .onDelete('cascade'),
+
+  // Foreign key to user (optional but helpful for filtering)
+  foreignKey({
+    columns: [table.userId],
+    foreignColumns: [user.id],
+    name: 'origin_domains_user_id_fkey',
+  })
+    .onUpdate('cascade')
+    .onDelete('cascade'),
+
+  // Prevent duplicate domains for the same chatbot
+  uniqueIndex('origin_domains_chatbot_id_domain_unique').on(table.chatbotId, table.domain),
+
+  // Indexes for fast lookups
+  index('origin_domains_api_key_idx').using('btree', table.apiKey.asc().nullsLast()),
+  index('origin_domains_chatbot_id_idx').using('btree', table.chatbotId.asc().nullsLast()),
 ]);
 
 export const dataSources = pgTable('data_source', {
@@ -143,7 +186,6 @@ export const embeddings = pgTable('embeddings', {
   id: serial('id').primaryKey(),
   userId: uuid('user_id').notNull(),
   chatbotId: integer('chatbot_id').notNull(),
-  topic: varchar('topic').notNull(),
   text: varchar('text').notNull(),
   vector: real("vector").array(), // this stores float[] of length 768
   createdAt: timestamp('created_at', { mode: 'date', withTimezone: true, precision: 6 }).defaultNow(),
