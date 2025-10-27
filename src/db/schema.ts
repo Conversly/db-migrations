@@ -42,6 +42,13 @@ export const chatbotStatus = pgEnum('ChatbotStatus', [
 ]);
 
 
+// Message type enum
+export const messageType = pgEnum('MessageType', [
+  'USER',
+  'ASSISTANT',
+]);
+
+
 
 export const user = pgTable(
   'user',
@@ -299,4 +306,25 @@ export const subscribedUsers = pgTable('subscribed_users', {
   })
     .onUpdate('cascade')
     .onDelete('restrict'),
+]);
+
+export const messages = pgTable('messages', {
+  id: serial('id').primaryKey(),
+  chatbotId: integer('chatbot_id').notNull(),
+  citations: text('citations').array().notNull(),
+  type: messageType().notNull(),
+  content: text('content').notNull(),
+  createdAt: timestamp('created_at', { mode: 'date', withTimezone: true, precision: 6 }).defaultNow(),
+  uniqueConvId: varchar('unique_conv_id', { length: 255 }).notNull(),
+}, (table) => [
+  index('messages_chatbot_id_idx').using('btree', table.chatbotId.asc().nullsLast()),
+  index('messages_unique_conv_id_idx').using('btree', table.uniqueConvId.asc().nullsLast()),
+
+  foreignKey({
+    columns: [table.chatbotId],
+    foreignColumns: [chatBots.id],
+    name: 'messages_chatbot_id_fkey',
+  })
+    .onUpdate('cascade')
+    .onDelete('cascade'),
 ]);
