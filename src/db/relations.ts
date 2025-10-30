@@ -9,6 +9,8 @@ import {
   citations,
   subscriptionPlans,
   subscribedUsers,
+  widgetConfig,
+  originDomains,
 } from './schema.js';
 
 export const usersRelations = relations(user, ({ many }) => ({
@@ -16,6 +18,7 @@ export const usersRelations = relations(user, ({ many }) => ({
   authMethods: many(authMethod),
   chatBots: many(chatBots),
   embeddings: many(embeddings),
+  originDomains: many(originDomains),
 }));
 
 
@@ -37,6 +40,11 @@ export const chatBotsRelations = relations(chatBots, ({ many, one }) => ({
     fields: [chatBots.userId],
     references: [user.id],
   }),
+  widgetConfig: one(widgetConfig, {
+    fields: [chatBots.id],
+    references: [widgetConfig.chatbotId],
+  }),
+  originDomains: many(originDomains),
 }));
 
 export const embeddingsRelations = relations(embeddings, ({ one }) => ({
@@ -89,5 +97,23 @@ export const subscribedUsersRelations = relations(subscribedUsers, ({ one }) => 
   subscriptionPlan: one(subscriptionPlans, {
     fields: [subscribedUsers.planId],
     references: [subscriptionPlans.planId],
+  }),
+}));
+
+export const widgetConfigRelations = relations(widgetConfig, ({ one }) => ({
+  chatBot: one(chatBots, {
+    fields: [widgetConfig.chatbotId],
+    references: [chatBots.id],
+  }),
+}));
+
+export const originDomainsRelations = relations(originDomains, ({ one }) => ({
+  chatBot: one(chatBots, {
+    fields: [originDomains.chatbotId],
+    references: [chatBots.id],
+  }),
+  user: one(user, {
+    fields: [originDomains.userId],
+    references: [user.id],
   }),
 }));

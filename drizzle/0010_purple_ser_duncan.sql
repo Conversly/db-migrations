@@ -1,0 +1,1 @@
+CREATE TYPE "public"."DisplayStyle" AS ENUM('corner', 'overlay');

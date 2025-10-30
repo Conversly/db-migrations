@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, varchar, integer, boolean, json, decimal, index, uniqueIndex, uuid,foreignKey, primaryKey, real, pgEnum, customType } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, timestamp, varchar, integer, boolean, json, decimal, index, uniqueIndex, uuid,foreignKey, unique, real, pgEnum, customType } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 const vector = customType<{ data: number[] }>({
@@ -44,10 +44,9 @@ export const chatbotStatus = pgEnum('ChatbotStatus', [
 
 // Message type enum
 export const messageType = pgEnum('MessageType', [
-  'USER',
-  'ASSISTANT',
+  'user',
+  'assistant',
 ]);
-
 
 
 export const user = pgTable(
@@ -328,3 +327,92 @@ export const messages = pgTable('messages', {
     .onUpdate('cascade')
     .onDelete('cascade'),
 ]);
+
+
+// please do not remove comments from widget config. mai confuse ho jata hun
+export const themeEnum = pgEnum('Theme', ['light', 'dark']);
+export const alignEnum = pgEnum('Align', ['left', 'right']);
+export const displayStyleEnum = pgEnum('DisplayStyle', ['corner', 'overlay']);
+
+type Theme = 'light' | 'dark';
+type Align = 'left' | 'right';
+type DisplayStyle = 'corner' | 'overlay';
+
+export interface WidgetStyles {
+  appearance: Theme;  // renamed from 'theme'
+  displayStyle: DisplayStyle;  // NEW: corner or overlay
+  displayName: string;  // keeping camelCase in DB
+  
+  // Colors
+  primaryColor: string;  // replaces headerColor, buttonColor
+  bubbleBubbleColour: string;  // NEW: for message bubbles
+  
+  // Icons & Assets
+  PrimaryIcon: string;  // renamed from profilePictureFile
+  widgeticon: string;  // renamed from chatIcon (for the widget button icon)
+  
+  // Button Configuration
+  alignChatButton: Align;  // maps to buttonAlignment in frontend
+  showButtonText: boolean;  // NEW
+  buttonText: string;  // NEW: text shown on widget button
+  widgetButtonText: string;  // NEW: alternate button text
+  
+  // Messages & Placeholders
+  messagePlaceholder: string;
+  footerText: string;  // HTML
+  dismissableNoticeText: string;  // maps to dismissibleNoticeText. HTML
+  
+  // Dimensions
+  chatWidth: string;  // NEW
+  chatHeight: string;  // NEW
+  
+  // Behavior Flags
+  autoShowInitial: boolean;  // NEW: replaces autoOpenChatWindowAfter > 0 check
+  autoShowDelaySec: number;  // renamed from autoOpenChatWindowAfter
+  collectUserFeedback: boolean;  // maps to collectFeedback
+  regenerateMessages: boolean;  // maps to allowRegenerate
+  continueShowingSuggestedMessages: boolean;  // maps to keepShowingSuggested
+  
+  // REMOVED: hiddenPaths (if no longer needed)
+  // REMOVED: userMessageColor (now using primaryColor)
+}
+
+
+export const widgetConfig = pgTable(
+  'widget_config',
+  {
+    id: serial('id').primaryKey(),
+
+    chatbotId: integer('chatbot_id')
+      .notNull()
+      .references(() => chatBots.id, { onUpdate: 'cascade', onDelete: 'cascade' }),
+
+    styles: json('styles')
+      .$type<WidgetStyles>()
+      .notNull(),
+
+    onlyAllowOnAddedDomains: boolean('only_allow_on_added_domains')
+      .notNull()
+      .default(false),
+
+    // Keep these as separate columns (good practice)
+    initialMessage: text('initial_message').notNull(),
+
+    suggestedMessages: text('suggested_messages')
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
+    
+    allowedDomains: text('allowed_domains')
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
+
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true, precision: 6 }).defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true, precision: 6 }).defaultNow(),
+  },
+  (table) => [
+    unique('widget_config_chatbot_id_unique').on(table.chatbotId),
+    index('widget_config_chatbot_id_idx').using('btree', table.chatbotId.asc().nullsLast()),
+  ]
+);
