@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, varchar, integer, boolean, json, decimal, index, uniqueIndex, uuid,foreignKey, unique, real, pgEnum, customType } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, timestamp, varchar, integer, smallint, boolean, json, decimal, index, uniqueIndex, uuid,foreignKey, unique, real, pgEnum, customType } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 const vector = customType<{ data: number[] }>({
@@ -6,6 +6,17 @@ const vector = customType<{ data: number[] }>({
     return 'vector';
   },
 });
+
+
+export const Feedback = {
+  None: 0,
+  Like: 1,
+  Dislike: 2,
+  Neutral: 3,
+} as const;
+
+export type FeedbackType = (typeof Feedback)[keyof typeof Feedback];
+
 
 export const authProvider = pgEnum('AuthProvider', [
   'PHANTOM_WALLET',
@@ -312,13 +323,17 @@ export const subscribedUsers = pgTable('subscribed_users', {
 ]);
 
 export const messages = pgTable('messages', {
-  id: serial('id').primaryKey(),
+  id: uuid('id').primaryKey(),
   chatbotId: integer('chatbot_id').notNull(),
   citations: text('citations').array().notNull(),
   type: messageType().notNull(),
   content: text('content').notNull(),
   createdAt: timestamp('created_at', { mode: 'date', withTimezone: true, precision: 6 }).defaultNow(),
   uniqueConvId: varchar('unique_conv_id', { length: 255 }).notNull(),
+
+    // 🆕 Feedback system
+  feedback: smallint('feedback').default(0).notNull(), // 0=none, 1=like, 2=dislike, 3=neutral
+  feedbackComment: text('feedback_comment'), // optional free-text user feedback
 }, (table) => [
   index('messages_chatbot_id_idx').using('btree', table.chatbotId.asc().nullsLast()),
   index('messages_unique_conv_id_idx').using('btree', table.uniqueConvId.asc().nullsLast()),
