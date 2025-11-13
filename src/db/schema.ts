@@ -61,6 +61,13 @@ export const messageType = pgEnum('MessageType', [
   'assistant',
 ]);
 
+// NEW Enums for WhatsApp
+export const whatsappAccountStatus = pgEnum('WhatsappAccountStatus', ['active', 'inactive']);
+export const whatsappSource = pgEnum('WhatsappSource', ['organic', 'imported', 'campaign', 'api']);
+export const whatsappConversationStatus = pgEnum('WhatsappConversationStatus', ['open', 'closed', 'pending', 'escalated']);
+export const whatsappSenderType = pgEnum('WhatsappSenderType', ['user', 'ai', 'agent', 'system']);
+export const whatsappMessageType = pgEnum('WhatsappMessageType', ['text', 'image', 'video', 'document', 'template']);
+export const whatsappMessageStatus = pgEnum('WhatsappMessageStatus', ['sent', 'delivered', 'read', 'failed']);
 
 export const user = pgTable(
   'user',
@@ -326,7 +333,7 @@ export const subscribedUsers = pgTable('subscribed_users', {
 export const messages = pgTable("messages", {
   id: uuid("id").primaryKey(),
   chatbotId: integer("chatbot_id").notNull(),
-  topicId: integer("topic_id").references(() => chatbotTopics.id),
+  topicId: integer("topic_id"),
   citations: text("citations").array().notNull().default(sql`ARRAY[]::text[]`),
   type: messageType().notNull(),
   content: text("content").notNull(),
@@ -343,6 +350,13 @@ export const messages = pgTable("messages", {
   })
     .onUpdate("cascade")
     .onDelete("cascade"),
+  foreignKey({
+    columns: [table.topicId],
+    foreignColumns: [chatbotTopics.id],
+    name: "messages_topic_id_fkey",
+  })
+    .onUpdate("cascade")
+    .onDelete("set null"),
 
   index("messages_chatbot_id_created_at_idx").on(table.chatbotId, table.createdAt.desc()),
   index("messages_chatbot_id_topic_id_created_at_idx").on(table.chatbotId, table.topicId, table.createdAt.desc()),
@@ -445,6 +459,13 @@ export const chatbotTopics = pgTable('chatbot_topics', {
   color: varchar('color', { length: 7 }).default('#888888'),
   createdAt: timestamp('created_at').defaultNow(),
 }, (table) => [
+  foreignKey({
+    columns: [table.chatbotId],
+    foreignColumns: [chatBots.id],
+    name: 'chatbot_topics_chatbot_id_fkey',
+  })
+    .onUpdate('cascade')
+    .onDelete('cascade'),
   index('chatbot_topics_chatbot_id_idx').on(table.chatbotId),
 ]);
 
@@ -466,4 +487,95 @@ export const chatbotTopicStats = pgTable("chatbot_topic_stats", {
   unique("chatbot_topic_date_unique").on(table.chatbotId, table.topicId, table.date),
   index("chatbot_topic_stats_chatbot_date_idx").on(table.chatbotId, table.date.desc()),
   index("chatbot_topic_stats_chatbot_topic_date_idx").on(table.chatbotId, table.topicId, table.date.desc()),
+]);
+
+// WhatsApp Tables
+export const whatsapp_accounts = pgTable('whatsapp_accounts', {
+  id: serial('id').primaryKey(),
+  chatbot_id: integer('chatbot_id').notNull().references(() => chatBots.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+  phone_number: varchar('phone_number', { length: 20 }).notNull().unique(),
+  waba_id: varchar('waba_id', { length: 255 }).notNull(),
+  phone_number_id: varchar('phone_number_id', { length: 255 }).notNull(),
+  display_phone_number: varchar('display_phone_number', { length: 20 }).notNull(),
+  access_token: text('access_token').notNull(),
+  verified_name: varchar('verified_name', { length: 255 }).notNull(),
+  status: whatsappAccountStatus('status').default('active').notNull(),
+  webhook_url: text('webhook_url'),
+  created_at: timestamp('created_at', { mode: 'date', precision: 6 }).defaultNow(),
+  updated_at: timestamp('updated_at', { mode: 'date', precision: 6 }).defaultNow(),
+}, (table) => [
+  index('whatsapp_accounts_chatbot_id_idx').on(table.chatbot_id),
+  index('whatsapp_accounts_phone_number_idx').on(table.phone_number),
+]);
+
+export const whatsapp_client_users = pgTable('whatsapp_client_users', {
+  id: serial('id').primaryKey(),
+  whatsapp_account_id: integer('whatsapp_account_id').notNull().references(() => whatsapp_accounts.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+  phone_number: varchar('phone_number', { length: 20 }).notNull(),
+  name: varchar('name', { length: 255 }),
+  country_code: varchar('country_code', { length: 5 }),
+  tags: json('tags').$type<string[]>().default(sql`ARRAY[]::text[]`),
+  source: whatsappSource('source').default('organic').notNull(),
+  opt_in_status: boolean('opt_in_status').default(true).notNull(),
+  profile_url: text('profile_url'),
+  last_seen: timestamp('last_seen'),
+  created_at: timestamp('created_at', { mode: 'date', precision: 6 }).defaultNow(),
+  updated_at: timestamp('updated_at', { mode: 'date', precision: 6 }).defaultNow(),
+}, (table) => [
+  uniqueIndex('whatsapp_client_users_account_phone_unique').on(table.whatsapp_account_id, table.phone_number),
+  index('whatsapp_client_users_account_id_idx').on(table.whatsapp_account_id),
+  index('whatsapp_client_users_phone_idx').on(table.phone_number),
+]);
+
+export const whatsapp_conversations = pgTable('whatsapp_conversations', {
+  id: serial('id').primaryKey(),
+  whatsapp_account_id: integer('whatsapp_account_id').notNull().references(() => whatsapp_accounts.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+  whatsapp_client_user_id: integer('whatsapp_client_user_id').notNull().references(() => whatsapp_client_users.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+  wa_conversation_id: varchar('wa_conversation_id', { length: 255 }).notNull().unique(),
+  started_at: timestamp('started_at').notNull(),
+  ended_at: timestamp('ended_at'),
+  status: whatsappConversationStatus('status').default('open').notNull(),
+  ai_involved: boolean('ai_involved').default(false).notNull(),
+  summary: text('summary'),
+  topic: varchar('topic', { length: 255 }),
+  created_at: timestamp('created_at', { mode: 'date', precision: 6 }).defaultNow(),
+  updated_at: timestamp('updated_at', { mode: 'date', precision: 6 }).defaultNow(),
+}, (table) => [
+  index('whatsapp_conversations_user_id_idx').on(table.whatsapp_client_user_id),
+  index('whatsapp_conversations_account_id_idx').on(table.whatsapp_account_id),
+  index('whatsapp_conversations_wa_id_idx').on(table.wa_conversation_id),
+]);
+
+export const whatsapp_messages = pgTable('whatsapp_messages', {
+  id: serial('id').primaryKey(),
+  conversation_id: integer('conversation_id').notNull().references(() => whatsapp_conversations.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+  wa_message_id: varchar('wa_message_id', { length: 255 }).notNull().unique(),
+  sender_type: whatsappSenderType('sender_type').notNull(),
+  message_type: whatsappMessageType('message_type').notNull(),
+  content: text('content').notNull(),
+  status: whatsappMessageStatus('status').default('sent').notNull(),
+  timestamp: timestamp('timestamp').notNull(),
+  response_time_ms: integer('response_time_ms'),
+  created_at: timestamp('created_at', { mode: 'date', precision: 6 }).defaultNow(),
+  updated_at: timestamp('updated_at', { mode: 'date', precision: 6 }).defaultNow(),
+}, (table) => [
+  index('whatsapp_messages_conversation_id_timestamp_idx').on(table.conversation_id, table.timestamp),
+  index('whatsapp_messages_wa_id_idx').on(table.wa_message_id),
+]);
+
+export const whatsapp_analytics = pgTable('whatsapp_analytics', {
+  id: serial('id').primaryKey(),
+  whatsapp_client_user_id: integer('whatsapp_client_user_id').notNull().references(() => whatsapp_client_users.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+  total_messages: integer('total_messages').default(0).notNull(),
+  total_responses: integer('total_responses').default(0).notNull(),
+  ai_responses: integer('ai_responses').default(0).notNull(),
+  human_responses: integer('human_responses').default(0).notNull(),
+  response_rate: decimal('response_rate', { precision: 5, scale: 4 }).default('0').notNull(),
+  avg_response_time: decimal('avg_response_time', { precision: 10, scale: 2 }).default('0').notNull(),
+  customer_satisfaction_score: integer('customer_satisfaction_score'),
+  last_updated: timestamp('last_updated', { mode: 'date', precision: 6 }).defaultNow(),
+  created_at: timestamp('created_at', { mode: 'date', precision: 6 }).defaultNow(),
+}, (table) => [
+  uniqueIndex('whatsapp_analytics_user_unique').on(table.whatsapp_client_user_id),
+  index('whatsapp_analytics_user_id_idx').on(table.whatsapp_client_user_id),
 ]);
