@@ -11,14 +11,13 @@ import {
   subscribedUsers,
   widgetConfig,
   originDomains,
-  whatsapp_accounts,
-  whatsapp_client_users,
-  whatsapp_conversations,
-  whatsapp_messages,
-  whatsapp_analytics,
   chatbotTopics,
   chatbotTopicStats,
   messages,
+  whatsapp_accounts,
+  WhatsappContacts,
+  AnalyticsPerDay,
+  WhatappAnalyticsPerDay,
 } from './schema.js';
 
 export const usersRelations = relations(user, ({ many }) => ({
@@ -53,9 +52,12 @@ export const chatBotsRelations = relations(chatBots, ({ many, one }) => ({
     references: [widgetConfig.chatbotId],
   }),
   originDomains: many(originDomains),
-  whatsapp_accounts: many(whatsapp_accounts), // NEW: Link to WA accounts
   chatbotTopics: many(chatbotTopics), // Assuming existing
   messages: many(messages),
+  whatsappAccounts: many(whatsapp_accounts),
+  whatsappContacts: many(WhatsappContacts),
+  analyticsPerDay: many(AnalyticsPerDay),
+  whatappAnalyticsPerDay: many(WhatappAnalyticsPerDay),
 }));
 
 export const embeddingsRelations = relations(embeddings, ({ one }) => ({
@@ -129,54 +131,6 @@ export const originDomainsRelations = relations(originDomains, ({ one }) => ({
   }),
 }));
 
-// WhatsApp Relations
-export const whatsappAccountsRelations = relations(whatsapp_accounts, ({ one, many }) => ({
-  chatBot: one(chatBots, {
-    fields: [whatsapp_accounts.chatbot_id],
-    references: [chatBots.id],
-  }),
-  clientUsers: many(whatsapp_client_users),
-  conversations: many(whatsapp_conversations),
-}));
-
-export const whatsappClientUsersRelations = relations(whatsapp_client_users, ({ one, many }) => ({
-  whatsappAccount: one(whatsapp_accounts, {
-    fields: [whatsapp_client_users.whatsapp_account_id],
-    references: [whatsapp_accounts.id],
-  }),
-  conversations: many(whatsapp_conversations),
-  analytics: one(whatsapp_analytics, {
-    fields: [whatsapp_client_users.id],
-    references: [whatsapp_analytics.whatsapp_client_user_id],
-  }),
-}));
-
-export const whatsappConversationsRelations = relations(whatsapp_conversations, ({ one, many }) => ({
-  whatsappAccount: one(whatsapp_accounts, {
-    fields: [whatsapp_conversations.whatsapp_account_id],
-    references: [whatsapp_accounts.id],
-  }),
-  whatsappClientUser: one(whatsapp_client_users, {
-    fields: [whatsapp_conversations.whatsapp_client_user_id],
-    references: [whatsapp_client_users.id],
-  }),
-  messages: many(whatsapp_messages),
-}));
-
-export const whatsappMessagesRelations = relations(whatsapp_messages, ({ one }) => ({
-  conversation: one(whatsapp_conversations, {
-    fields: [whatsapp_messages.conversation_id],
-    references: [whatsapp_conversations.id],
-  }),
-}));
-
-export const whatsappAnalyticsRelations = relations(whatsapp_analytics, ({ one }) => ({
-  whatsappClientUser: one(whatsapp_client_users, {
-    fields: [whatsapp_analytics.whatsapp_client_user_id],
-    references: [whatsapp_client_users.id],
-  }),
-}));
-
 // Existing topics relations (added for completeness)
 export const chatbotTopicsRelations = relations(chatbotTopics, ({ one, many }) => ({
   chatBot: one(chatBots, {
@@ -206,5 +160,33 @@ export const messagesRelations = relations(messages, ({ one }) => ({
   topic: one(chatbotTopics, {
     fields: [messages.topicId],
     references: [chatbotTopics.id],
+  }),
+}));
+
+export const whatsappContactsRelations = relations(WhatsappContacts, ({ one, many }) => ({
+  chatBot: one(chatBots, {
+    fields: [WhatsappContacts.chatbotId],
+    references: [chatBots.id],
+  }),
+}));
+
+export const whatsappAccountsRelations = relations(whatsapp_accounts, ({ one }) => ({
+  chatBot: one(chatBots, {
+    fields: [whatsapp_accounts.chatbotId],
+    references: [chatBots.id],
+  }),
+}));
+
+export const analyticsPerDayRelations = relations(AnalyticsPerDay, ({ one }) => ({
+  chatBot: one(chatBots, {
+    fields: [AnalyticsPerDay.chatbotId],
+    references: [chatBots.id],
+  }),
+}));
+
+export const whatappAnalyticsPerDayRelations = relations(WhatappAnalyticsPerDay, ({ one }) => ({
+  chatBot: one(chatBots, {
+    fields: [WhatappAnalyticsPerDay.chatbotId],
+    references: [chatBots.id],
   }),
 }));
