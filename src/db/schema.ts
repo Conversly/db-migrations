@@ -139,7 +139,7 @@ export const authMethod = pgTable(
 );
 
 export const chatBots = pgTable('chatbot', {
-  id: serial('id').primaryKey(),
+  id: uuid('id').defaultRandom().primaryKey(),
   userId: uuid('user_id').notNull(),
   name: varchar('name').notNull(),
   description: text('description').notNull(),
@@ -165,7 +165,7 @@ export const chatBots = pgTable('chatbot', {
 export const originDomains = pgTable('origin_domains', {
   id: serial('id').primaryKey(),
   userId: uuid('user_id').notNull(),
-  chatbotId: integer('chatbot_id').notNull(),
+  chatbotId: uuid('chatbot_id').notNull(),
   apiKey: varchar('api_key', { length: 255 }).notNull(),
   domain: varchar('domain').notNull(),
   createdAt: timestamp('created_at', { mode: 'date', precision: 6 }).defaultNow(),
@@ -198,7 +198,7 @@ export const originDomains = pgTable('origin_domains', {
 
 export const dataSources = pgTable('data_source', {
   id: serial('id').primaryKey(),
-  chatbotId: integer('chatbot_id').notNull(),
+  chatbotId: uuid('chatbot_id').notNull(),
   type: dataSourceType().notNull(),
   sourceDetails: json('source_details').notNull(),
   createdAt: timestamp('created_at', { mode: 'date', withTimezone: true, precision: 6 }).defaultNow(),
@@ -220,7 +220,7 @@ export const dataSources = pgTable('data_source', {
 export const embeddings = pgTable('embeddings', {
   id: serial('id').primaryKey(),
   userId: uuid('user_id').notNull(),
-  chatbotId: integer('chatbot_id').notNull(),
+  chatbotId: uuid('chatbot_id').notNull(),
   text: varchar('text').notNull(),
   vector: real("vector").array(), // this stores float[] of length 768
   createdAt: timestamp('created_at', { mode: 'date', withTimezone: true, precision: 6 }).defaultNow(),
@@ -255,7 +255,7 @@ export const embeddings = pgTable('embeddings', {
 
 export const analytics = pgTable('analytics', {
   id: serial('id').primaryKey(),
-  chatbotId: integer('chatbot_id').notNull().unique('unique_chatbot_id'),
+  chatbotId: uuid('chatbot_id').notNull().unique('unique_chatbot_id'),
   responses: integer('responses').default(0),
   likes: integer('likes').default(0),
   dislikes: integer('dislikes').default(0),
@@ -274,7 +274,7 @@ export const analytics = pgTable('analytics', {
 export const citations = pgTable('citation', {
   id: serial('id').primaryKey(),
   analyticsId: integer('analytics_id').notNull(),
-  chatbotId: integer('chatbot_id').notNull(),
+  chatbotId: uuid('chatbot_id').notNull(),
   source: text('source').notNull(),
   count: integer('count').default(1),
   createdAt: timestamp('created_at', { mode: 'date', precision: 6 }).defaultNow(),
@@ -339,7 +339,7 @@ export const subscribedUsers = pgTable('subscribed_users', {
 export const messages = pgTable('messages', {
   id: uuid('id').primaryKey().defaultRandom(),
   uniqueConvId: integer('unique_conv_id'),
-  chatbotId: integer('chatbot_id').notNull(),  // denormalized for fast filtering
+  chatbotId: uuid('chatbot_id').notNull(),  // denormalized for fast filtering
 
   channel: messageChannel('channel').notNull().default('WIDGET'),  
   type: messageType('type').notNull().default('user'),
@@ -437,7 +437,7 @@ export const widgetConfig = pgTable(
   {
     id: serial('id').primaryKey(),
 
-    chatbotId: integer('chatbot_id')
+    chatbotId: uuid('chatbot_id')
       .notNull()
       .references(() => chatBots.id, { onUpdate: 'cascade', onDelete: 'cascade' }),
 
@@ -473,7 +473,7 @@ export const widgetConfig = pgTable(
 
 export const chatbotTopics = pgTable('chatbot_topics', {
   id: serial('id').primaryKey(),
-  chatbotId: integer('chatbot_id').notNull(),
+  chatbotId: uuid('chatbot_id').notNull(),
   name: varchar('name', { length: 255 }).notNull(),
   color: varchar('color', { length: 7 }).default('#888888'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -490,7 +490,7 @@ export const chatbotTopics = pgTable('chatbot_topics', {
 
 export const chatbotTopicStats = pgTable("chatbot_topic_stats", {
   id: serial("id").primaryKey(),
-  chatbotId: integer("chatbot_id").notNull(),
+  chatbotId: uuid("chatbot_id").notNull(),
   topicId: integer("topic_id").notNull(),
   likeCount: integer("like_count").default(0).notNull(),
   dislikeCount: integer("dislike_count").default(0).notNull(),
@@ -508,10 +508,10 @@ export const chatbotTopicStats = pgTable("chatbot_topic_stats", {
   index("chatbot_topic_stats_chatbot_topic_date_idx").on(table.chatbotId, table.topicId, table.date.desc()),
 ]);
 
-// WhatsApp accounts (minimal, credentials-focused)
+// WhatsApp accounts (with webhook secrets and all required details)
 export const whatsapp_accounts = pgTable('whatsapp_accounts', {
   id: serial('id').primaryKey(),
-  chatbotId: integer('chatbot_id').notNull().references(() => chatBots.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+  chatbotId: uuid('chatbot_id').notNull().references(() => chatBots.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
   phoneNumber: varchar('phone_number', { length: 20 }).notNull().unique(),
   wabaId: varchar('waba_id', { length: 255 }).notNull(),
   phoneNumberId: varchar('phone_number_id', { length: 255 }).notNull(),
@@ -520,24 +520,24 @@ export const whatsapp_accounts = pgTable('whatsapp_accounts', {
   verifiedName: varchar('verified_name', { length: 255 }).notNull(),
   status: whatsappAccountStatus('status').default('active').notNull(),
   webhookUrl: text('webhook_url'),
+  webhookSecret: text('webhook_secret'), // Facebook App Secret for webhook verification
+  verifyToken: varchar('verify_token', { length: 255 }), // Webhook verification token
   createdAt: timestamp('created_at', { mode: 'date', precision: 6 }).defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'date', precision: 6 }).defaultNow(),
 }, (table) => [
   index('whatsapp_accounts_chatbot_id_idx').on(table.chatbotId),
   index('whatsapp_accounts_phone_number_idx').on(table.phoneNumber),
+  unique('whatsapp_accounts_chatbot_id_unique').on(table.chatbotId), // One WhatsApp account per chatbot
 ]);
 
 
 export const WhatsappContacts = pgTable('whatsapp_contacts', {
   id: serial('id').primaryKey(),
-  chatbotId: integer('chatbot_id').notNull(),
-
+  chatbotId: uuid('chatbot_id').notNull(),
   phoneNumber: varchar('phone_number', { length: 255 }).notNull(),
   displayName: varchar('display_name', { length: 255 }),
-
-  // e.g. { wa_id, profile, first_seen_at, last_seen_at, last_inbound_message_id, waba_id, phone_number_id, display_phone_number, source }
+  // Detailed metadata: { wa_id, profile, first_seen_at, last_seen_at, last_inbound_message_id, waba_id, phone_number_id, display_phone_number, source, opt_in_status, etc }
   userMetadata: json('whatsapp_user_metadata').notNull(),
-
   createdAt: timestamp('created_at', { mode: 'date', precision: 6 }).defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'date', precision: 6 }).defaultNow(),
 }, (table) => [
@@ -554,7 +554,7 @@ export const WhatsappContacts = pgTable('whatsapp_contacts', {
 
 export const AnalyticsPerDay = pgTable('analytics_per_day', {
   id: serial('id').primaryKey(),
-  chatbotId: integer('chatbot_id').notNull(),
+  chatbotId: uuid('chatbot_id').notNull(),
 
   date: date('date').notNull().default(sql`CURRENT_DATE`),
 
@@ -589,7 +589,7 @@ export const AnalyticsPerDay = pgTable('analytics_per_day', {
 // only core whatsapp related columns
 export const WhatappAnalyticsPerDay = pgTable('whatapp_analytics_per_day', {
   id: serial('id').primaryKey(),
-  chatbotId: integer('chatbot_id').notNull(),
+  chatbotId: uuid('chatbot_id').notNull(),
 
   date: date('date').notNull().default(sql`CURRENT_DATE`),
 
