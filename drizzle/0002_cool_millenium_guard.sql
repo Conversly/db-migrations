@@ -1,2 +1,0 @@
-CREATE TYPE "public"."DataSourceStatus" AS ENUM('QUEUEING', 'PROCESSING', 'COMPLETED', 'FAILED');--> statement-breakpoint
-ALTER TABLE "data_source" ADD COLUMN "status" "DataSourceStatus" DEFAULT 'QUEUEING' NOT NULL;

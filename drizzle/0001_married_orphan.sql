@@ -1,1 +1,0 @@
-ALTER TYPE "public"."DataSourceType" ADD VALUE 'DOCUMENT';--> statement-breakpoint

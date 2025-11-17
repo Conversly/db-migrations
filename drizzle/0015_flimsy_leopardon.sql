@@ -1,2 +1,0 @@
-CREATE INDEX "messages_chatbot_id_created_at_idx" ON "messages" USING btree ("chatbot_id","created_at");--> statement-breakpoint
-CREATE INDEX "messages_chatbot_id_unique_conv_id_created_at_idx" ON "messages" USING btree ("chatbot_id","unique_conv_id","created_at");

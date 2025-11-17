@@ -1,1 +1,0 @@
-ALTER TYPE "public"."DataSourceStatus" ADD VALUE 'DRAFT' BEFORE 'QUEUEING';

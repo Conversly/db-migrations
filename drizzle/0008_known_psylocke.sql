@@ -1,1 +1,0 @@
-ALTER TABLE "widget_config" ALTER COLUMN "initial_message" DROP DEFAULT;
