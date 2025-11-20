@@ -16,7 +16,7 @@ import {
   subscribedUsers,
   analyticsPerDay,
   whataappAnalyticsPerDay,
-} from './schema/index.js';
+} from './schema.ts';
 
 export const userRelations = relations(user, ({ many, one }) => ({
   authMethods: many(authMethod),
