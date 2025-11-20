@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import * as schema from './db/schema.js';
+import * as schema from './db/schema/index.js';
 
 export const db = drizzle({ 
   connection: { 

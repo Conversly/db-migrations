@@ -8,6 +8,13 @@
       "when": 1763361196778,
       "tag": "0000_brown_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1763639388638,
+      "tag": "0001_lively_kree",
+      "breakpoints": true
     }
   ]
 }

@@ -20,6 +20,10 @@
     "declaration": true,
     "declarationMap": true,
 
+    // Allow importing .ts extensions (required for drizzle-kit)
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+
     // Stricter Typechecking Options
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
