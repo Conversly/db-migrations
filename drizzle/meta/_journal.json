@@ -15,6 +15,13 @@
       "when": 1763639388638,
       "tag": "0001_lively_kree",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1764413964996,
+      "tag": "0002_nosy_deadpool",
+      "breakpoints": true
     }
   ]
 }
