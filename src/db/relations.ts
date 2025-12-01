@@ -18,6 +18,7 @@ import {
   subscribedUsers,
   analyticsPerDay,
   whataappAnalyticsPerDay,
+  productLaunches,
 } from './schema.js';
 
 export const userRelations = relations(user, ({ many, one }) => ({
@@ -26,6 +27,7 @@ export const userRelations = relations(user, ({ many, one }) => ({
   embeddings: many(embeddings),
   originDomains: many(originDomains),
   subscribedUsers: many(subscribedUsers),
+  productLaunches: many(productLaunches),
 }));
 
 export const authMethodRelations = relations(authMethod, ({ one }) => ({
@@ -53,6 +55,7 @@ export const chatBotsRelations = relations(chatBots, ({ one, many }) => ({
   originDomains: many(originDomains),
   analyticsPerDay: many(analyticsPerDay),
   whatsappAnalyticsPerDay: many(whataappAnalyticsPerDay),
+  productLaunches: many(productLaunches),
 }));
 
 export const dataSourcesRelations = relations(dataSources, ({ one, many }) => ({
@@ -185,6 +188,17 @@ export const analyticsPerDayRelations = relations(analyticsPerDay, ({ one }) => 
 export const whatsappAnalyticsPerDayRelations = relations(whataappAnalyticsPerDay, ({ one }) => ({
   chatBot: one(chatBots, {
     fields: [whataappAnalyticsPerDay.chatbotId],
+    references: [chatBots.id],
+  }),
+}));
+
+export const productLaunchesRelations = relations(productLaunches, ({ one }) => ({
+  user: one(user, {
+    fields: [productLaunches.userId],
+    references: [user.id],
+  }),
+  chatBot: one(chatBots, {
+    fields: [productLaunches.chatbotId],
     references: [chatBots.id],
   }),
 }));
