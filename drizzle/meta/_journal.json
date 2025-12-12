@@ -15,6 +15,20 @@
       "when": 1764622652491,
       "tag": "0001_cuddly_blue_marvel",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1764417683741,
+      "tag": "0003_brief_zaladane",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1764480562176,
+      "tag": "0004_woozy_the_leader",
+      "breakpoints": true
     }
   ]
 }

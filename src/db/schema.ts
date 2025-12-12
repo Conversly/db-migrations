@@ -23,6 +23,7 @@ export const authProvider = pgEnum('AuthProvider', [
   'PHANTOM_WALLET',
   'GOOGLE_OAUTH',
   'EMAIL',
+  'EMAIL_PASSWORD',
 ]);
 
 
@@ -60,6 +61,7 @@ export const chatbotStatus = pgEnum('ChatbotStatus', [
 export const messageChannel = pgEnum('MessageChannel', [
   'WIDGET',
   'WHATSAPP',
+  'VOICE',
 ]);
 
 export const messageType = pgEnum('MessageType', [
@@ -67,6 +69,31 @@ export const messageType = pgEnum('MessageType', [
   'assistant',  // AI agent
   'agent',      // human support agent
 ]);
+
+
+export const sttProvider = pgEnum('stt_provider', [
+    'DEEPGRAM',
+    'WHISPER',
+    'GOOGLE',
+    'AZURE',
+    'AWS_TRANSCRIBE',
+    'ASSEMBLYAI'
+]);
+
+export const ttsProvider = pgEnum('tts_provider', [
+    'ELEVENLABS',
+    'OPENAI',
+    'GOOGLE',
+    'AZURE',
+    'AWS_POLLY',
+    'PLAYHT'
+]);
+
+
+export const voiceGender = pgEnum('voice_gender', ['MALE', 'FEMALE', 'NEUTRAL']);
+
+export const voiceBotStatus = pgEnum('voice_bot_status', ['ACTIVE', 'INACTIVE', 'TESTING']);
+
 
 // NEW Enums for WhatsApp
 export const whatsappAccountStatus = pgEnum('WhatsappAccountStatus', ['active', 'inactive']);
@@ -93,6 +120,8 @@ export const user = pgTable(
     displayName: text('display_name').notNull(),
     avatarUrl: text('avatar_url'),
     username: text('username'),
+    isEmailVerified: boolean('is_email_verified').default(false).notNull(),
+    verificationToken: text('verification_token'),
   }
 );
 
@@ -162,6 +191,21 @@ export const chatBots = pgTable('chatbot', {
     .onUpdate('cascade')
     .onDelete('cascade'),
   index('chatbot_user_id_idx').using('btree', table.userId.asc().nullsLast()),
+]);
+
+// Per-channel prompts so you can override the base systemPrompt for WhatsApp/Web/Voice
+export const chatbotChannelPrompts = pgTable('chatbot_channel_prompts', {
+    id: text('id').primaryKey().notNull().$defaultFn(() => createId()),
+    chatbotId: text('chatbot_id')
+        .notNull()
+        .references(() => chatBots.id, { onUpdate: 'cascade', onDelete: 'cascade' }),
+    channel: messageChannel('channel').notNull(), // WIDGET, WHATSAPP, VOICE
+    systemPrompt: text('system_prompt').notNull(),
+    createdAt: timestamp('created_at', { mode: 'date', withTimezone: true, precision: 6 }).defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true, precision: 6 }).defaultNow(),
+}, (table) => [
+    unique('chatbot_channel_prompts_chatbot_channel_unique').on(table.chatbotId, table.channel),
+    index('chatbot_channel_prompts_chatbot_id_idx').on(table.chatbotId),
 ]);
 
 export const originDomains = pgTable('origin_domains', {
@@ -703,3 +747,430 @@ export const productLaunches = pgTable(
         index('product_launches_likes_count_idx').using('btree', table.likesCount.desc().nullsLast()),
     ]
 );
+
+
+export const testStatus = pgEnum('test_status', [
+    'not_tested',
+    'passed',
+    'failed',
+    'error',
+]);
+
+// Custom Actions Table
+export const customActions = pgTable('custom_actions', {
+    id: text('id').primaryKey().notNull().$defaultFn(() => createId()),
+    chatbotId: text('chatbot_id').notNull(),
+
+    // Metadata
+    name: varchar('name', { length: 100 }).notNull(),
+    displayName: varchar('display_name', { length: 200 }).notNull(),
+    description: text('description').notNull(),
+    isEnabled: boolean('is_enabled').default(true).notNull(),
+
+    // API Configuration (JSONB for flexibility)
+    apiConfig: json('api_config').notNull(), // Contains method, base_url, endpoint, headers, etc.
+
+    // Tool Schema (for LLM consumption)
+    toolSchema: json('tool_schema').notNull(), // JSON Schema format for parameters
+
+    // Metadata
+    version: integer('version').default(1).notNull(),
+    createdAt: timestamp('created_at', { mode: 'date', precision: 6 }).defaultNow(),
+    updatedAt: timestamp('updated_at', { mode: 'date', precision: 6 }).defaultNow(),
+    createdBy: text('created_by'),
+    lastTestedAt: timestamp('last_tested_at', { mode: 'date', precision: 6 }),
+    testStatus: testStatus('test_status').default('not_tested'),
+    testResult: json('test_result'),
+}, (table) => [
+    // Foreign keys
+    foreignKey({
+        columns: [table.chatbotId],
+        foreignColumns: [chatBots.id],
+        name: 'custom_actions_chatbot_id_fkey',
+    })
+        .onUpdate('cascade')
+        .onDelete('cascade'),
+    foreignKey({
+        columns: [table.createdBy],
+        foreignColumns: [user.id],
+        name: 'custom_actions_created_by_fkey',
+    })
+        .onUpdate('cascade')
+        .onDelete('set null'),
+
+    // Unique constraint
+    unique('unique_action_per_chatbot').on(table.chatbotId, table.name),
+
+    // Indexes
+    index('custom_actions_chatbot_enabled_idx').on(table.chatbotId).where(sql`${table.isEnabled} = true`),
+    index('custom_actions_chatbot_name_idx').on(table.chatbotId, table.name),
+    index('custom_actions_updated_idx').on(table.updatedAt.desc()),
+]);
+
+// Action Templates Table (for common pre-built actions)
+export const actionTemplates = pgTable('action_templates', {
+    id: text('id').primaryKey().notNull().$defaultFn(() => createId()),
+    name: varchar('name', { length: 100 }).notNull().unique(),
+    category: varchar('category', { length: 50 }).notNull(),
+    displayName: varchar('display_name', { length: 200 }).notNull(),
+    description: text('description').notNull(),
+    iconUrl: text('icon_url'),
+
+    templateConfig: json('template_config').notNull(),
+
+    requiredFields: text('required_fields').array().notNull().default(sql`ARRAY[]::text[]`),
+
+    // Metadata
+    isPublic: boolean('is_public').default(true).notNull(),
+    usageCount: integer('usage_count').default(0).notNull(),
+    createdAt: timestamp('created_at', { mode: 'date', precision: 6 }).defaultNow(),
+}, (table) => [
+    index('action_templates_category_idx').on(table.category),
+    index('action_templates_usage_idx').on(table.usageCount.desc()),
+]);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ============================================
+// VOICE BOT ENUMS
+// ============================================
+
+export const turnDetectionMode = pgEnum('turn_detection_mode', [
+    'stt',
+    'vad',
+    'realtime_llm',
+    'manual'
+]);
+
+// STT Models (LiveKit supported)
+export const sttModel = pgEnum('stt_model', [
+    // Deepgram
+    'deepgram:nova-2',
+    'deepgram:nova-2-general',
+    'deepgram:nova-2-conversationalai',
+]);
+
+// TTS Models (LiveKit supported)
+export const ttsModel = pgEnum('tts_model', [
+    // ElevenLabs
+    'elevenlabs:eleven_turbo_v2_5',
+    'elevenlabs:eleven_turbo_v2',
+    'elevenlabs:eleven_multilingual_v2',
+    'elevenlabs:eleven_flash_v2_5',
+    'elevenlabs:eleven_flash_v2',
+]);
+
+// LLM Models
+export const llmModel = pgEnum('llm_model', [
+    // OpenAI
+    'openai:gpt-4o',
+    'openai:gpt-4o-mini',
+    'openai:gpt-4-turbo',
+    'openai:gpt-4o-realtime',
+    'openai:gpt-4o-mini-realtime',
+]);
+
+export const voiceCallStatus = pgEnum('voice_call_status', [
+    'INITIATED',
+    'CONNECTING',
+    'IN_PROGRESS',
+    'COMPLETED',
+    'FAILED',
+    'DROPPED',
+    'TIMEOUT',
+    'USER_AWAY'
+]);
+
+export const voiceWidgetPosition = pgEnum('voice_widget_position', [
+    'bottom-right',
+    'bottom-left',
+    'top-right',
+    'top-left'
+]);
+
+export const voiceWidgetStyle = pgEnum('voice_widget_style', [
+    'floating-button',
+    'embedded',
+    'full-screen-overlay'
+]);
+
+export interface VoiceProviderSettings {
+    // ElevenLabs
+    stability?: number;           // 0-1
+    similarityBoost?: number;     // 0-1
+    style?: number;               // 0-1
+    useSpeakerBoost?: boolean;
+
+    // Cartesia & OpenAI TTS & Google
+    speed?: number;               // Cartesia: -1 to 1, OpenAI/Google: 0.25 to 4.0
+    emotion?: string[];           // Cartesia e.g., ["positivity:high", "curiosity"]
+
+    // Google & Azure
+    pitch?: number | string;      // Google: number (-20.0 to 20.0), Azure: string (e.g., "+5Hz", "-2st")
+    volumeGainDb?: number;        // Google: -96.0 to 16.0
+
+    // Azure
+    rate?: string;                // e.g., "+10%", "-5%"
+}
+
+export const voiceConfig = pgTable(
+    'voice_config',
+    {
+        id: text('id').primaryKey().notNull().$defaultFn(() => createId()),
+
+        chatbotId: text('chatbot_id')
+            .notNull()
+            .references(() => chatBots.id, { onUpdate: 'cascade', onDelete: 'cascade' }),
+
+        status: voiceBotStatus('status').default('INACTIVE').notNull(),
+
+        turnDetection: turnDetectionMode('turn_detection').notNull().default('stt'),
+        sttModel: sttModel('stt_model').notNull().default('deepgram:nova-2'),
+        ttsModel: ttsModel('tts_model').notNull().default('elevenlabs:eleven_turbo_v2_5'),
+        llmModel: llmModel('llm_model').notNull().default('openai:gpt-4o-mini'),
+
+        allowInterruptions: boolean('allow_interruptions').notNull().default(true),
+        discardAudioIfUninterruptible: boolean('discard_audio_if_uninterruptible').notNull().default(true),
+        minInterruptionDuration: integer('min_interruption_duration').notNull().default(500), // ms
+        minInterruptionWords: integer('min_interruption_words').notNull().default(0),
+        minEndpointingDelay: integer('min_endpointing_delay').notNull().default(500), // ms
+        maxEndpointingDelay: integer('max_endpointing_delay').notNull().default(6000), // ms
+        maxToolSteps: integer('max_tool_steps').notNull().default(3),
+        preemptiveGeneration: boolean('preemptive_generation').notNull().default(false),
+        userAwayTimeout: real('user_away_timeout').default(15.0), // seconds, nullable
+
+        voiceId: text('voice_id').notNull(), // Provider-specific voice ID (e.g., "rachel" for ElevenLabs)
+        voiceGender: voiceGender('voice_gender').default('NEUTRAL'),
+        language: varchar('language', { length: 10 }).notNull().default('en-US'), // BCP-47 format
+
+        voiceSettings: json('voice_settings').$type<VoiceProviderSettings>(),
+
+        systemPrompt: text('system_prompt'), // If null, falls back to chatbot's systemPrompt
+        initialGreeting: text('initial_greeting').notNull().default('Hello! How can I help you today?'),
+        closingMessage: text('closing_message').default('Thank you for calling. Goodbye!'),
+
+        maxCallDurationSec: integer('max_call_duration_sec').notNull().default(600), // 10 min
+
+        createdAt: timestamp('created_at', { mode: 'date', withTimezone: true, precision: 6 }).defaultNow(),
+        updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true, precision: 6 }).defaultNow(),
+    },
+    (table) => [
+        uniqueIndex('voice_config_chatbot_active_unique').on(table.chatbotId).where(sql`${table.status} = 'ACTIVE'`),
+        index('voice_config_chatbot_id_idx').using('btree', table.chatbotId.asc().nullsLast()),
+    ]
+);
+
+
+// ============================================
+// VOICE WIDGET CONFIG TABLE (1:1 with voice_config)
+// ============================================
+
+export interface VoiceWidgetStyles {
+    // Position & Style
+    position: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
+    widgetStyle: 'floating-button' | 'embedded' | 'full-screen-overlay';
+
+    // Colors
+    primaryColor: string;
+    backgroundColor: string;
+    activeCallColor: string;
+    mutedColor: string;
+
+    // Icons (URLs or icon identifiers)
+    callButtonIcon: string;
+    endCallIcon: string;
+    muteIcon: string;
+
+    // Dimensions
+    buttonSize: string;           // e.g., '64px'
+    expandedWidth: string;        // e.g., '320px'
+    expandedHeight: string;       // e.g., '400px'
+
+    // Button Configuration
+    showButtonText: boolean;
+    buttonText: string;           // e.g., "Talk to us"
+
+    // Visual Feedback
+    showWaveform: boolean;
+    showCallTimer: boolean;
+    showTranscription: boolean;
+
+    // Branding
+    showPoweredBy: boolean;
+    avatarUrl?: string;
+    displayName: string;
+}
+
+// Default widget styles
+export const defaultVoiceWidgetStyles: VoiceWidgetStyles = {
+    position: 'bottom-right',
+    widgetStyle: 'floating-button',
+    primaryColor: '#007bff',
+    backgroundColor: '#ffffff',
+    activeCallColor: '#28a745',
+    mutedColor: '#dc3545',
+    callButtonIcon: 'phone',
+    endCallIcon: 'phone-off',
+    muteIcon: 'mic-off',
+    buttonSize: '64px',
+    expandedWidth: '320px',
+    expandedHeight: '400px',
+    showButtonText: true,
+    buttonText: 'Talk to us',
+    showWaveform: true,
+    showCallTimer: true,
+    showTranscription: false,
+    showPoweredBy: true,
+    displayName: 'Voice Assistant',
+};
+
+export const voiceWidgetConfig = pgTable(
+    'voice_widget_config',
+    {
+        id: text('id').primaryKey().notNull().$defaultFn(() => createId()),
+
+        voiceConfigId: text('voice_config_id')
+            .notNull()
+            .references(() => voiceConfig.id, { onUpdate: 'cascade', onDelete: 'cascade' }),
+
+        styles: json('styles').$type<VoiceWidgetStyles>().notNull(),
+
+        // Domain restrictions
+        onlyAllowOnAddedDomains: boolean('only_allow_on_added_domains').notNull().default(false),
+        allowedDomains: text('allowed_domains').array().notNull().default(sql`ARRAY[]::text[]`),
+
+        createdAt: timestamp('created_at', { mode: 'date', withTimezone: true, precision: 6 }).defaultNow(),
+        updatedAt: timestamp('updated_at', { mode: 'date', withTimezone: true, precision: 6 }).defaultNow(),
+    },
+    (table) => [
+        unique('voice_widget_config_voice_config_id_unique').on(table.voiceConfigId),
+        index('voice_widget_config_voice_config_id_idx').using('btree', table.voiceConfigId.asc().nullsLast()),
+    ]
+);
+
+
+
+// Transcript structure matching LiveKit's ConversationItemAddedEvent
+export interface ConversationTranscript {
+    items: Array<{
+        id: string;
+        role: 'user' | 'assistant';
+        content: string;
+        timestamp: string;
+        isFinal: boolean;
+    }>;
+}
+
+// Metrics from LiveKit
+export interface CallMetrics {
+    // STT metrics
+    sttLatencyMs?: number;
+
+    // LLM metrics  
+    ttft?: number;              // Time to first token
+    llmLatencyMs?: number;
+    tokensPerSecond?: number;
+    inputTokens?: number;
+    outputTokens?: number;
+
+    // TTS metrics
+    ttsLatencyMs?: number;
+
+    // Overall
+    totalLatencyMs?: number;
+    interruptionCount?: number;
+}
+
+export const voiceCallSession = pgTable(
+    'voice_call_session',
+    {
+        id: text('id').primaryKey().notNull().$defaultFn(() => createId()),
+
+        voiceConfigId: text('voice_config_id')
+            .notNull()
+            .references(() => voiceConfig.id, { onUpdate: 'cascade', onDelete: 'set null' }),
+
+        // LiveKit identifiers
+        roomName: text('room_name').notNull(),
+        participantIdentity: text('participant_identity'),
+
+        status: voiceCallStatus('status').notNull().default('INITIATED'),
+
+        // Caller info
+        callerMetadata: json('caller_metadata').$type<Record<string, unknown>>(),
+
+        // Timing
+        startedAt: timestamp('started_at', { mode: 'date', withTimezone: true, precision: 6 }),
+        connectedAt: timestamp('connected_at', { mode: 'date', withTimezone: true, precision: 6 }),
+        endedAt: timestamp('ended_at', { mode: 'date', withTimezone: true, precision: 6 }),
+        durationSec: integer('duration_sec'),
+
+        // Transcription
+        fullTranscript: json('full_transcript').$type<ConversationTranscript>(),
+
+        // LiveKit Metrics (from MetricsCollectedEvent)
+        metrics: json('metrics').$type<CallMetrics>(),
+
+        // End reason
+        endReason: text('end_reason'), // 'user_hangup', 'timeout', 'error', 'max_duration', etc.
+        errorMessage: text('error_message'),
+
+        // Usage tracking
+        sttDurationMs: integer('stt_duration_ms'),
+        ttsCharactersUsed: integer('tts_characters_used'),
+        llmTokensUsed: integer('llm_tokens_used'),
+
+        createdAt: timestamp('created_at', { mode: 'date', withTimezone: true, precision: 6 }).defaultNow(),
+    },
+    (table) => [
+        index('voice_call_session_voice_config_id_idx').using('btree', table.voiceConfigId.asc().nullsLast()),
+        index('voice_call_session_started_at_idx').using('btree', table.startedAt.desc().nullsLast()),
+        index('voice_call_session_status_idx').using('btree', table.status.asc().nullsLast()),
+        index('voice_call_session_room_name_idx').using('btree', table.roomName.asc().nullsLast()),
+    ]
+);
+
+// ============================================
+// HELPER TYPE - Full Voice Options (matches LiveKit exactly)
+// ============================================
+
+export interface VoiceOptions {
+    allowInterruptions: boolean;
+    discardAudioIfUninterruptible: boolean;
+    minInterruptionDuration: number;
+    minInterruptionWords: number;
+    minEndpointingDelay: number;
+    maxEndpointingDelay: number;
+    maxToolSteps: number;
+    preemptiveGeneration: boolean;
+    userAwayTimeout: number | null;
+}
+
+export const defaultVoiceOptions: VoiceOptions = {
+    allowInterruptions: true,
+    discardAudioIfUninterruptible: true,
+    minInterruptionDuration: 500,
+    minInterruptionWords: 0,
+    minEndpointingDelay: 500,
+    maxEndpointingDelay: 6000,
+    maxToolSteps: 3,
+    preemptiveGeneration: false,
+    userAwayTimeout: 15.0,
+};
